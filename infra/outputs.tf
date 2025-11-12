@@ -1,0 +1,36 @@
+output "aurora_writer_endpoint" {
+  description = "Aurora PostgreSQL writer endpoint"
+  value       = module.aurora.writer_endpoint
+}
+
+output "aurora_password" {
+  description = "Aurora master password"
+  value       = random_password.aurora_password.result
+  sensitive   = true
+}
+
+output "oracle_password" {
+  description = "Oracle password (demo only - replace with real password)"
+  value       = random_password.oracle_password.result
+  sensitive   = true
+}
+
+output "dms_task_arn" {
+  description = "DMS replication task ARN"
+  value       = module.dms.task_arn
+}
+
+output "dms_replication_instance_arn" {
+  description = "DMS replication instance ARN"
+  value       = module.dms.replication_instance_arn
+}
+
+output "vpc_id" {
+  description = "VPC ID"
+  value       = aws_vpc.main.id
+}
+
+output "subnet_ids" {
+  description = "Private subnet IDs"
+  value       = aws_subnet.private[*].id
+}

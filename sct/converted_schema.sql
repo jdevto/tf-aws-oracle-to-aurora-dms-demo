@@ -1,0 +1,8 @@
+-- Place your converted schema SQL here
+-- This file is automatically applied to Aurora PostgreSQL when you run terraform apply
+--
+-- Example:
+-- CREATE TABLE example_table (
+--     id SERIAL PRIMARY KEY,
+--     name VARCHAR(255)
+-- );
