@@ -1,11 +1,11 @@
 # S3 bucket for schema file
 resource "aws_s3_bucket" "schema" {
-  bucket = "dms-demo-schema-${random_id.suffix.hex}"
+  bucket = "${local.name_prefix}-schema-${random_id.suffix.hex}"
 
   force_destroy = true
 
   tags = {
-    Name = "dms-demo-schema"
+    Name = "${local.name_prefix}-schema"
   }
 }
 
@@ -46,7 +46,7 @@ resource "local_file" "downloaded_zip" {
 
 # Security group for Lambda
 resource "aws_security_group" "lambda" {
-  name        = "lambda-schema-applier-sg"
+  name        = "${local.name_prefix}-lambda-schema-applier-sg"
   description = "Security group for Lambda schema applier"
   vpc_id      = aws_vpc.main.id
 
@@ -59,13 +59,13 @@ resource "aws_security_group" "lambda" {
   }
 
   tags = {
-    Name = "lambda-schema-applier-sg"
+    Name = "${local.name_prefix}-lambda-schema-applier-sg"
   }
 }
 
 # IAM role for Lambda
 resource "aws_iam_role" "lambda_schema" {
-  name = "lambda-schema-applier-role-${random_id.suffix.hex}"
+  name = "${local.name_prefix}-lambda-schema-applier-role-${random_id.suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -79,13 +79,13 @@ resource "aws_iam_role" "lambda_schema" {
   })
 
   tags = {
-    Name = "lambda-schema-applier-role"
+    Name = "${local.name_prefix}-lambda-schema-applier-role"
   }
 }
 
 # IAM policy for Lambda
 resource "aws_iam_role_policy" "lambda_schema" {
-  name = "lambda-schema-applier-policy"
+  name = "${local.name_prefix}-lambda-schema-applier-policy"
   role = aws_iam_role.lambda_schema.id
 
   policy = jsonencode({
@@ -122,7 +122,7 @@ resource "aws_iam_role_policy" "lambda_schema" {
           "events:DisableRule",
           "events:DescribeRule"
         ]
-        Resource = "arn:aws:events:${data.aws_region.current.region}:*:rule/dms-demo-schema-applier-*"
+        Resource = "arn:aws:events:${data.aws_region.current.region}:*:rule/${local.name_prefix}-schema-applier-*"
       }
     ]
   })
@@ -156,16 +156,52 @@ try:
 except ImportError as e:
     raise Exception(f"psycopg2 not found in Lambda layer. Error: {str(e)}. Ensure the layer is correctly configured.")
 
+def apply_schema(host, db_name, db_user, db_password, schema_sql, db_label):
+    """Apply schema to a database"""
+    try:
+        conn = psycopg2.connect(
+            host=host,
+            database=db_name,
+            user=db_user,
+            password=db_password,
+            port=5432,
+            connect_timeout=10
+        )
+        cursor = conn.cursor()
+
+        # Execute schema SQL (split by semicolon for multiple statements)
+        statements = [s.strip() for s in schema_sql.split(';') if s.strip() and not s.strip().startswith('--')]
+        for statement in statements:
+            if statement:
+                cursor.execute(statement)
+        conn.commit()
+        cursor.close()
+        conn.close()
+        print(f"Schema applied successfully to {db_label}")
+        return True
+    except Exception as e:
+        print(f"Error applying schema to {db_label}: {str(e)}")
+        return False
+
 def lambda_handler(event, context):
     s3 = boto3.client('s3')
     events = boto3.client('events')
 
     bucket = os.environ['SCHEMA_BUCKET']
     key = os.environ['SCHEMA_KEY']
-    endpoint = os.environ['AURORA_ENDPOINT']
-    db_name = os.environ['AURORA_DB_NAME']
-    db_user = os.environ['AURORA_USER']
-    db_password = os.environ['AURORA_PASSWORD']
+
+    # Source RDS PostgreSQL
+    source_endpoint = os.environ['SOURCE_ENDPOINT']
+    source_db_name = os.environ['SOURCE_DB_NAME']
+    source_user = os.environ['SOURCE_USER']
+    source_password = os.environ['SOURCE_PASSWORD']
+
+    # Target Aurora
+    aurora_endpoint = os.environ['AURORA_ENDPOINT']
+    aurora_db_name = os.environ['AURORA_DB_NAME']
+    aurora_user = os.environ['AURORA_USER']
+    aurora_password = os.environ['AURORA_PASSWORD']
+
     rule_name = os.environ['EVENTBRIDGE_RULE_NAME']
 
     try:
@@ -181,63 +217,37 @@ def lambda_handler(event, context):
                 'body': json.dumps({'message': 'Schema file is empty, skipping'})
             }
 
-        # Connect to Aurora
-        conn = psycopg2.connect(
-            host=endpoint,
-            database=db_name,
-            user=db_user,
-            password=db_password,
-            port=5432,
-            connect_timeout=10
+        # Apply schema to source RDS PostgreSQL first
+        source_success = apply_schema(
+            source_endpoint, source_db_name, source_user, source_password,
+            schema_sql, "source RDS PostgreSQL"
         )
 
-        cursor = conn.cursor()
+        # Apply schema to target Aurora
+        aurora_success = apply_schema(
+            aurora_endpoint, aurora_db_name, aurora_user, aurora_password,
+            schema_sql, "target Aurora"
+        )
 
-        # Execute schema SQL (split by semicolon for multiple statements)
-        statements = [s.strip() for s in schema_sql.split(';') if s.strip() and not s.strip().startswith('--')]
-        for statement in statements:
-            if statement:
-                cursor.execute(statement)
-        conn.commit()
-
-        cursor.close()
-        conn.close()
-
-        # Disable EventBridge rule on success
-        try:
-            events.disable_rule(Name=rule_name)
-            rule_disabled = True
-        except Exception as e:
-            rule_disabled = False
-            print(f"Warning: Could not disable rule: {str(e)}")
+        # Disable EventBridge rule only if both succeeded
+        rule_disabled = False
+        if source_success and aurora_success:
+            try:
+                events.disable_rule(Name=rule_name)
+                rule_disabled = True
+            except Exception as e:
+                print(f"Warning: Could not disable rule: {str(e)}")
 
         return {
             'statusCode': 200,
             'body': json.dumps({
-                'message': 'Schema applied successfully',
+                'message': 'Schema application completed',
+                'source_success': source_success,
+                'aurora_success': aurora_success,
                 'rule_disabled': rule_disabled
             })
         }
 
-    except psycopg2.OperationalError as e:
-        # Aurora might not be ready yet, retry on next invocation
-        error_msg = str(e)
-        if 'could not connect' in error_msg.lower() or 'timeout' in error_msg.lower():
-            return {
-                'statusCode': 202,
-                'body': json.dumps({
-                    'message': f'Aurora not ready yet: {error_msg}',
-                    'will_retry': True
-                })
-            }
-        # Other operational errors - might be schema issues
-        return {
-            'statusCode': 500,
-            'body': json.dumps({
-                'message': f'Database error: {error_msg}',
-                'will_retry': False
-            })
-        }
     except Exception as e:
         # Other errors - log but don't disable rule
         return {
@@ -255,7 +265,7 @@ EOF
 resource "aws_lambda_function" "schema_applier" {
   count         = fileexists("${path.module}/../sct/converted_schema.sql") ? 1 : 0
   filename      = data.archive_file.lambda_zip.output_path
-  function_name = "dms-demo-schema-applier-${random_id.suffix.hex}"
+  function_name = "${local.name_prefix}-schema-applier-${random_id.suffix.hex}"
   role          = aws_iam_role.lambda_schema.arn
   handler       = "lambda_function.lambda_handler"
   runtime       = "python3.12"
@@ -271,8 +281,14 @@ resource "aws_lambda_function" "schema_applier" {
 
   environment {
     variables = {
-      SCHEMA_BUCKET         = aws_s3_bucket.schema.id
-      SCHEMA_KEY            = "converted_schema.sql"
+      SCHEMA_BUCKET = aws_s3_bucket.schema.id
+      SCHEMA_KEY    = "converted_schema.sql"
+      # Source RDS PostgreSQL
+      SOURCE_ENDPOINT = module.rds_postgres.endpoint
+      SOURCE_DB_NAME  = local.rds_postgres_db_name
+      SOURCE_USER     = local.rds_postgres_master_user
+      SOURCE_PASSWORD = random_password.rds_postgres_password.result
+      # Target Aurora
       AURORA_ENDPOINT       = module.aurora.writer_endpoint
       AURORA_DB_NAME        = local.aurora_db_name
       AURORA_USER           = local.aurora_master_user
@@ -287,14 +303,14 @@ resource "aws_lambda_function" "schema_applier" {
   ]
 
   tags = {
-    Name = "dms-demo-schema-applier"
+    Name = "${local.name_prefix}-schema-applier"
   }
 }
 
 # CloudWatch Log Group for Lambda
 resource "aws_cloudwatch_log_group" "lambda_schema" {
   count = fileexists("${path.module}/../sct/converted_schema.sql") ? 1 : 0
-  name  = "/aws/lambda/dms-demo-schema-applier-${random_id.suffix.hex}"
+  name  = "/aws/lambda/${local.name_prefix}-schema-applier-${random_id.suffix.hex}"
 
   lifecycle {
     prevent_destroy = false
@@ -306,13 +322,13 @@ resource "aws_cloudwatch_log_group" "lambda_schema" {
 # EventBridge rule to trigger Lambda every minute (only if schema file exists)
 resource "aws_cloudwatch_event_rule" "schema_applier" {
   count               = fileexists("${path.module}/../sct/converted_schema.sql") ? 1 : 0
-  name                = "dms-demo-schema-applier-${random_id.suffix.hex}"
+  name                = "${local.name_prefix}-schema-applier-${random_id.suffix.hex}"
   description         = "Trigger schema applier Lambda every minute"
   schedule_expression = "rate(1 minute)"
   state               = "ENABLED"
 
   tags = {
-    Name = "dms-demo-schema-applier-rule"
+    Name = "${local.name_prefix}-schema-applier-rule"
   }
 }
 

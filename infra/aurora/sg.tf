@@ -1,6 +1,6 @@
 # Security group for Aurora
 resource "aws_security_group" "aurora" {
-  name        = "aurora-dms-demo-sg"
+  name        = "${var.name_prefix}-aurora-sg"
   description = "Security group for Aurora PostgreSQL"
   vpc_id      = var.vpc_id
 
@@ -32,13 +32,13 @@ resource "aws_security_group" "aurora" {
   }
 
   tags = {
-    Name = "aurora-dms-demo-sg"
+    Name = "${var.name_prefix}-aurora-sg"
   }
 }
 
 # Security group for DMS
 resource "aws_security_group" "dms" {
-  name        = "dms-demo-sg"
+  name        = "${var.name_prefix}-dms-sg"
   description = "Security group for DMS replication instance"
   vpc_id      = var.vpc_id
 
@@ -51,6 +51,6 @@ resource "aws_security_group" "dms" {
   }
 
   tags = {
-    Name = "dms-demo-sg"
+    Name = "${var.name_prefix}-dms-sg"
   }
 }

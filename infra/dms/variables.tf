@@ -1,3 +1,8 @@
+variable "name_prefix" {
+  description = "Prefix for resource names"
+  type        = string
+}
+
 variable "vpc_id" {
   description = "VPC ID"
   type        = string
@@ -49,29 +54,29 @@ variable "dms_sg_id" {
   type        = string
 }
 
-variable "oracle_host" {
-  description = "Oracle host"
+variable "rds_postgres_endpoint" {
+  description = "RDS PostgreSQL endpoint"
   type        = string
 }
 
-variable "oracle_port" {
-  description = "Oracle port"
+variable "rds_postgres_port" {
+  description = "RDS PostgreSQL port"
   type        = number
 }
 
-variable "oracle_user" {
-  description = "Oracle username"
+variable "rds_postgres_user" {
+  description = "RDS PostgreSQL username"
   type        = string
 }
 
-variable "oracle_password" {
-  description = "Oracle password"
+variable "rds_postgres_password" {
+  description = "RDS PostgreSQL password"
   type        = string
   sensitive   = true
 }
 
-variable "oracle_service_name" {
-  description = "Oracle service name"
+variable "rds_postgres_db_name" {
+  description = "RDS PostgreSQL database name"
   type        = string
 }
 

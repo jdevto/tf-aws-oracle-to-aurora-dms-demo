@@ -1,27 +1,27 @@
-# Source endpoint (Oracle)
+# Source endpoint (RDS PostgreSQL)
 resource "aws_dms_endpoint" "source" {
-  endpoint_id   = "dms-demo-oracle-source"
+  endpoint_id   = "${var.name_prefix}-rds-postgres"
   endpoint_type = "source"
-  engine_name   = "oracle"
+  engine_name   = "postgres"
 
-  server_name   = var.oracle_host
-  port          = var.oracle_port
-  username      = var.oracle_user
-  password      = var.oracle_password
-  database_name = var.oracle_service_name
+  server_name   = var.rds_postgres_endpoint
+  port          = var.rds_postgres_port
+  username      = var.rds_postgres_user
+  password      = var.rds_postgres_password
+  database_name = var.rds_postgres_db_name
 
-  ssl_mode = "none"
+  ssl_mode = "require"
 
-  extra_connection_attributes = "useLogminerReader=Y;archivedLogDestId=1"
+  extra_connection_attributes = ""
 
   tags = {
-    Name = "dms-demo-oracle-source"
+    Name = "${var.name_prefix}-rds-postgres"
   }
 }
 
 # Target endpoint (Aurora PostgreSQL)
 resource "aws_dms_endpoint" "target" {
-  endpoint_id   = "dms-demo-aurora-target"
+  endpoint_id   = "${var.name_prefix}-aurora-target"
   endpoint_type = "target"
   engine_name   = "aurora-postgresql"
 
@@ -34,6 +34,6 @@ resource "aws_dms_endpoint" "target" {
   extra_connection_attributes = "executeTimeout=120"
 
   tags = {
-    Name = "dms-demo-aurora-target"
+    Name = "${var.name_prefix}-aurora-target"
   }
 }

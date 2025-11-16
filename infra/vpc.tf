@@ -5,7 +5,7 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
 
   tags = {
-    Name = "dms-demo-vpc"
+    Name = "${local.name_prefix}-vpc"
   }
 }
 
@@ -17,7 +17,7 @@ resource "aws_subnet" "private" {
   availability_zone = local.azs[count.index]
 
   tags = {
-    Name = "dms-demo-private-${local.azs[count.index]}"
+    Name = "${local.name_prefix}-private-${local.azs[count.index]}"
   }
 }
 
@@ -26,7 +26,7 @@ resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
   tags = {
-    Name = "dms-demo-igw"
+    Name = "${local.name_prefix}-igw"
   }
 }
 
@@ -35,7 +35,7 @@ resource "aws_eip" "nat" {
   domain = "vpc"
 
   tags = {
-    Name = "dms-demo-nat-eip"
+    Name = "${local.name_prefix}-nat-eip"
   }
 }
 
@@ -44,7 +44,7 @@ resource "aws_nat_gateway" "main" {
   subnet_id     = aws_subnet.private[0].id
 
   tags = {
-    Name = "dms-demo-nat"
+    Name = "${local.name_prefix}-nat"
   }
 
   depends_on = [aws_internet_gateway.main]
@@ -60,7 +60,7 @@ resource "aws_route_table" "private" {
   }
 
   tags = {
-    Name = "dms-demo-private-rt"
+    Name = "${local.name_prefix}-private-rt"
   }
 }
 
@@ -72,21 +72,31 @@ resource "aws_route_table_association" "private" {
 
 # DB subnet group for Aurora
 resource "aws_db_subnet_group" "aurora" {
-  name       = "dms-demo-aurora-subnet-group"
+  name       = "${local.name_prefix}-aurora-subnet-group"
   subnet_ids = aws_subnet.private[*].id
 
   tags = {
-    Name = "dms-demo-aurora-subnet-group"
+    Name = "${local.name_prefix}-aurora-subnet-group"
+  }
+}
+
+# DB subnet group for RDS PostgreSQL
+resource "aws_db_subnet_group" "rds_postgres" {
+  name       = "${local.name_prefix}-rds-postgres-subnet-group"
+  subnet_ids = aws_subnet.private[*].id
+
+  tags = {
+    Name = "${local.name_prefix}-rds-postgres-subnet-group"
   }
 }
 
 # DMS replication subnet group
 resource "aws_dms_replication_subnet_group" "main" {
-  replication_subnet_group_id          = "dms-demo-subnet-group"
+  replication_subnet_group_id          = "${local.name_prefix}-subnet-group"
   replication_subnet_group_description = "DMS replication subnet group"
   subnet_ids                           = aws_subnet.private[*].id
 
   tags = {
-    Name = "dms-demo-subnet-group"
+    Name = "${local.name_prefix}-subnet-group"
   }
 }

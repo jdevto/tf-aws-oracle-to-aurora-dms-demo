@@ -38,3 +38,7 @@ terraform.rc
 
 # Generated Lambda artifacts
 *.zip
+lambda-layer/
+
+# Terraform output files (contain sensitive passwords)
+tf-outputs.json

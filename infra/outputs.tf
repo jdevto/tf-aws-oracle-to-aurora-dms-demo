@@ -9,10 +9,15 @@ output "aurora_password" {
   sensitive   = true
 }
 
-output "oracle_password" {
-  description = "Oracle password (demo only - replace with real password)"
-  value       = random_password.oracle_password.result
+output "rds_postgres_password" {
+  description = "RDS PostgreSQL password"
+  value       = random_password.rds_postgres_password.result
   sensitive   = true
+}
+
+output "rds_postgres_endpoint" {
+  description = "RDS PostgreSQL endpoint"
+  value       = module.rds_postgres.endpoint
 }
 
 output "dms_task_arn" {

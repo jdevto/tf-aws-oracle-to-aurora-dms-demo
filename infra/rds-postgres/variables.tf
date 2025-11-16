@@ -9,7 +9,7 @@ variable "vpc_id" {
 }
 
 variable "subnet_ids" {
-  description = "Subnet IDs for Aurora"
+  description = "Subnet IDs for RDS"
   type        = list(string)
 }
 
@@ -19,12 +19,12 @@ variable "db_subnet_group_id" {
 }
 
 variable "engine_version" {
-  description = "Aurora PostgreSQL engine version"
+  description = "PostgreSQL engine version"
   type        = string
 }
 
 variable "instance_class" {
-  description = "Aurora instance class"
+  description = "RDS instance class"
   type        = string
 }
 
@@ -44,8 +44,12 @@ variable "master_password" {
   sensitive   = true
 }
 
+variable "dms_sg_id" {
+  description = "DMS security group ID"
+  type        = string
+}
+
 variable "lambda_sg_id" {
   description = "Lambda security group ID"
   type        = string
-  default     = ""
 }
